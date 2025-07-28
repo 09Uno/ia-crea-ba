@@ -28,6 +28,7 @@ serve(async (req) => {
     const webhookUrl = Deno.env.get('DOCUMENT_PROCESSING_WEBHOOK_URL')
     const authHeader = Deno.env.get('NOTEBOOK_GENERATION_AUTH')
 
+    // Validate webhook URL format
     if (!webhookUrl) {
       console.error('Missing DOCUMENT_PROCESSING_WEBHOOK_URL environment variable')
       
@@ -45,6 +46,60 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ error: 'Document processing webhook URL not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate that the webhook URL is properly formatted
+    if (!webhookUrl.startsWith('http://') && !webhookUrl.startsWith('https://')) {
+      console.error('Invalid DOCUMENT_PROCESSING_WEBHOOK_URL format. URL must start with http:// or https://. Current value:', webhookUrl)
+      
+      // Initialize Supabase client to update status
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
+
+      // Update source status to failed
+      await supabaseClient
+        .from('sources')
+        .update({ processing_status: 'failed' })
+        .eq('id', sourceId)
+
+      return new Response(
+        JSON.stringify({ 
+          error: 'Document processing webhook URL is malformed', 
+          details: `URL must start with http:// or https://. Current value: ${webhookUrl}`,
+          fix: 'Please update the DOCUMENT_PROCESSING_WEBHOOK_URL secret in your Supabase Edge Functions settings with the complete URL including protocol (e.g., https://your-n8n-instance.com/webhook/19566c6c-e0a5-4a8f-ba1a-5203c2b663b7)'
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Additional validation to ensure URL is complete
+    try {
+      new URL(webhookUrl)
+    } catch (urlError) {
+      console.error('Invalid DOCUMENT_PROCESSING_WEBHOOK_URL format. Not a valid URL:', webhookUrl, urlError)
+      
+      // Initialize Supabase client to update status
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
+
+      // Update source status to failed
+      await supabaseClient
+        .from('sources')
+        .update({ processing_status: 'failed' })
+        .eq('id', sourceId)
+
+      return new Response(
+        JSON.stringify({ 
+          error: 'Document processing webhook URL is invalid', 
+          details: `Invalid URL format: ${webhookUrl}`,
+          fix: 'Please update the DOCUMENT_PROCESSING_WEBHOOK_URL secret in your Supabase Edge Functions settings with a valid complete URL (e.g., https://your-n8n-instance.com/webhook/19566c6c-e0a5-4a8f-ba1a-5203c2b663b7)'
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
