@@ -78,7 +78,12 @@ serve(async (req) => {
 
     // Additional validation to ensure URL is complete
     try {
-      new URL(webhookUrl)
+      // Clean up double slashes in the URL path (common configuration error)
+      const cleanedWebhookUrl = webhookUrl.replace(/([^:]\/)\/+/g, '$1')
+      new URL(cleanedWebhookUrl)
+      
+      // Use the cleaned URL for the actual request
+      webhookUrl = cleanedWebhookUrl
     } catch (urlError) {
       console.error('Invalid DOCUMENT_PROCESSING_WEBHOOK_URL format. Not a valid URL:', webhookUrl, urlError)
       
